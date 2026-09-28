@@ -1,5 +1,7 @@
 # Duplikat lokal — jangan ikut repo
 /backend - Copy/
+# Backend sudah pisah ke repo sendiri: asepsr/serverwa
+/backend/
 
 # Kredensial & sesi WhatsApp (jangan pernah di-commit)
 session/
