@@ -3,6 +3,7 @@
 > Backend: `https://apps.aspsr.xyz` (Laravel)
 > Bot: `https://bot.aspsr.xyz` (Baileys Node.js + Express)
 > Terakhir diverifikasi dari kode: `bot/src/index.ts`, `bot/src/config/index.ts`, `bot/src/services/apiService.ts`, `backend/routes/api.php`, `backend/config/bot.php`, `backend/config/services.php`
+> Deploy production 28–29 Sep 2026 terbukti jalan. Pelajaran sesi deploy didokumentasikan di §4.5, §8 (baris baru), dan §10.
 
 ---
 
@@ -208,6 +209,38 @@ curl https://bot.aspsr.xyz/health
 # {"status":"ok",...}
 ```
 
+### 4.5 Isi form aaPanel Add Node Project (PM2 Project)
+
+> Pengalaman deploy: salah isi satu kolom = bot `stopped` / 502. Ikuti persis.
+
+| Kolom | Isi | Catatan |
+|-------|-----|---------|
+| Project Name | `whatsapp-bot` | Bebas, tanpa spasi |
+| Node Version | **20.x** (`Install other` bila belum ada) | Jangan v26 — Baileys 6.7 belum tested di Node 26. Project pakai `@types/node 20` + image `node:20-alpine` |
+| Startup File | `dist/index.js` | Hasil `npm run build` (`tsconfig outDir: ./dist`). Ketik manual bila file picker belum melihatnya (belum build) |
+| Run Directory | folder berisi `package.json`, mis. `/www/wwwroot/Bot_wa/bot` | Repo `Bot_wa` strukturnya `Bot_wa/bot/...` |
+| Cluster | `1` | Wajib 1 — >1 bikin session rebutan + pesan dobel |
+| Memory Limit | `512`–`1024` | VPS 2GB: `1024` aman |
+| Auto Restart | ON | — |
+| Package Manager | `npm` | Repo pakai `package-lock.json`. Jangan `pnpm`/`bun` — pernah error `Interpreter bun is NOT AVAILABLE in PATH` |
+| More settings → Environment Variables | 5 baris §4.2 | Satu baris satu `KEY=VALUE`, tanpa spasi/kutip. Tiap baris tepat 1 tanda `=` (parser aaPanel `split("=")` pecah bila value mengandung `=`, mis. key base64 → error `ValueError: length 3`) |
+| More settings → Run User | `www` | Semua perintah `pm2` wajib `sudo -u www pm2 ...` (daemon PM2 per-user; `pm2` sebagai root tidak melihat proses `www` → `Process not found`) |
+| More settings → Project Port | `3000` | Harus sama dengan `PORT` di env |
+| More settings → Domain name | `bot.aspsr.xyz` | Mapping domain dibuat otomatis di tab Node.js Project (bukan Proxy Project) |
+
+Setelah Confirm:
+
+```bash
+cd /www/wwwroot/Bot_wa/bot
+npm ci
+npm run build
+sudo -u www pm2 restart whatsapp-bot --update-env
+sudo -u www pm2 logs whatsapp-bot --lines 30 --nostream
+```
+
+> `dist/` memang **tidak ada di git** (di-ignore `bot/.gitignore:2`) — itu hasil build, bukan ketinggalan push. Build selalu di server.
+> Warning `In-memory PM2 7.0.3 vs Local 7.0.4` rapikan sekali: `sudo -u www pm2 update && sudo -u www pm2 save`.
+
 ---
 
 ## 5. Deploy Bot — Opsi B: Docker (Alternatif)
@@ -334,6 +367,18 @@ pm2 restart whatsapp-bot
 | `loggedOut` / diminta scan terus | Session corrupt. `POST /session/reset` atau `rm -rf session/*` + restart + scan ulang. |
 | Admin `/admin/whatsapp` = `Layanan bot tidak aktif` | `BOT_SERVICE_URL` salah / bot mati / firewall. Tes dari VPS: `curl http://127.0.0.1:3000/health`. Bila 1 VPS, pakai `http://127.0.0.1:3000` bukan domain. |
 | `POST /api/customers` 404 (perintah `CUSTOMER` gagal) | Bug known: bot memanggil endpoint yang belum ada di Laravel (hanya `GET /api/customers/{waId}/orders` yang terdaftar). Perlu tambah route+controller bila fitur alamat dipakai. |
+| `ERR_UNSUPPORTED_DIR_IMPORT: Directory import '.../dist/config'` | Import relatif tanpa ekstensi (`from './config'`) jalan di `tsx` tapi crash di `node dist/`. Fix: semua import relatif pakai `.js` (`from './config/index.js'`). Commit `d817d7a`. |
+| Log `API GET ...: ECONNREFUSED 127.0.0.1:8000` padahal backend hidup | `BOT_API_URL` tidak kepakai → fallback `http://localhost:8000`. Dua penyebab yang terbukti: (1) bot tidak pernah memanggil `dotenv.config()` sehingga file `.env` diabaikan; (2) exec cwd PM2 aaPanel = `.../bot/dist`, bukan `.../bot/`, jadi `.env` tidak ketemu. Fix: `dotenv.config({ path: <projectRoot>/.env })` + resolve `SESSION_PATH` relatif ke project root (`6fad61a`). Sesi pindah `dist/session` → `bot/session` (migrasi: `cp -a`). |
+| Log `API ...:` kosong tanpa detail | Format winston menelan argumen error axios. Fix: `describeError()` → `status=? code=? msg=? body=` (`5c35ac9`). |
+| `pm2 restart` → `Process or Namespace not found` / tabel `pm2 status` kosong | Perintah jalan sebagai `root`, project milik `www`. Selalu `sudo -u www pm2 ...`. |
+| `Interpreter bun is NOT AVAILABLE in PATH` | Package Manager / runtime kepilih `bun`. Hapus project, buat ulang dengan `npm` + Node 20. |
+| `ValueError: dictionary update sequence element #1 has length 3` saat save form | Satu baris env mengandung 2 tanda `=` (mis. paste `APP_KEY=base64:...=` atau placeholder). Env bot hanya 5 baris §4.2, tiap baris tepat 1 `=`, key pakai hex (`openssl rand -hex`), bukan base64. |
+| `nginx -t` → `"http3" directive is duplicate`, reload gagal, domain 502 terus | Template aaPanel menulis `listen 443 quic;` + `http3 on;` dobel di conf Node. Fix: `sed -i '/listen 443 quic;/d; /http3 on;/d' /www/server/panel/vhost/nginx/node_whatsapp-bot.conf` lalu `nginx -t && nginx -s reload`. Jangan aktifkan QUIC/http3 untuk site ini. |
+| Nginx `connect() failed (111: Connection refused) upstream 127.0.0.1:3131/3030` | Target proxy bukan `3000`. File aktif Node: `/www/server/panel/vhost/nginx/node_whatsapp-bot.conf` (cek `grep -n proxy_pass`). Ubah via UI Node.js Project → Project Port `3000` (jangan edit file manual, ditimpa aaPanel). Catatan: `GET /` dan `/favicon.ico` 404 itu normal — bot tidak punya route `/`; test selalu `/health`. |
+| `curl -H key ...` → `Unauthorized` padahal key benar | Format header salah. Wajib `curl -H "X-Bot-API-Key: KEY" ...` (nama header + titik dua + kutip). Tanpa nama header selalu 401. |
+| Key tertukar `APP_KEY` vs `WHATSAPP_API_KEY` | `APP_KEY=base64:...` (enkripsi Laravel) **bukan** key bot. Key bot = `WHATSAPP_API_KEY` (backend) = `API_KEY` (bot). Cek: `grep WHATSAPP_API_KEY backend/.env`. |
+| `git pull` di VPS → `Permission denied (publickey)` | Clone awal pakai SSH tanpa key. Ganti: `git remote set-url origin https://github.com/asepsr/Bot_wa.git` lalu `git pull`. |
+| `git pull` → `local changes would be overwritten` (file src sama) | Ada edit coba-coba di VPS. Buang aman: `git stash push -m "..."` lalu `git pull`. |
 | Disk penuh | `docker system df`, `df -h`. Jangan `prune --volumes` sembarangan (bisa hapus session bila pakai named volume). |
 
 Cek cepat:
@@ -347,7 +392,47 @@ curl -H "X-Bot-API-Key: KEY_KAMU" https://apps.aspsr.xyz/api/products
 
 ---
 
-## 9. Checklist Selesai
+## 10. Git — Repo Bot (`Bot_wa`)
+
+Remote produksi pakai **HTTPS** (jangan SSH — VPS dan laptop tidak punya SSH key):
+
+```bash
+git remote -v
+# botwa  https://github.com/asepsr/Bot_wa.git (fetch/push)
+# origin https://github.com/khelinggit-ui/botwhatsappwarung.git (repo lama, dipertahankan)
+
+git add bot/src/...   # hanya file bot + docs
+git commit -m "..."
+git push botwa main
+```
+
+Yang **tidak** ikut repo (di-ignore): `.env`, `session/`, `dist/`, `node_modules/`. `dist/` selalu di-build di server (`npm run build`).
+
+Riwayat fix deploy 28–29 Sep 2026:
+
+| Commit | Isi |
+|--------|-----|
+| `a22e3f6` | Docs: setup aaPanel + Dockerfile + compose |
+| `d817d7a` | Fix: ekstensi `.js` pada import ESM agar `dist` jalan di Node |
+| `5c35ac9` | Fix: log detail error axios (`status/code/msg/body`) |
+| `1f997b1` / `6fad61a` | Fix: load dotenv + resolve `.env`/session absolut ke project root (cwd PM2 = `dist/`) |
+
+Alur update rutin di VPS:
+
+```bash
+cd /www/wwwroot/Bot_wa
+git pull
+cd bot
+npm ci   # bila package.json berubah; kalau tidak, lewati
+npm run build
+sudo -u www pm2 restart whatsapp-bot --update-env
+curl http://127.0.0.1:3000/health
+curl https://bot.aspsr.xyz/health
+```
+
+---
+
+## 11. Checklist Selesai
 
 - [ ] `apps.aspsr.xyz` jalan (Laravel + SSL), `APP_URL` = domain publik
 - [ ] `WHATSAPP_API_KEY` (backend) = `API_KEY` (bot)
