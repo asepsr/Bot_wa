@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } from '@whiskeysockets/baileys';
 import type { WASocket } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
