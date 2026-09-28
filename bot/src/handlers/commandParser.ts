@@ -1,5 +1,5 @@
-import { sanitizeInput, validateOrderInput } from '../utils/validators';
-import { COMMANDS } from '../utils/constants';
+import { sanitizeInput, validateOrderInput } from '../utils/validators.js';
+import { COMMANDS } from '../utils/constants.js';
 
 export function parseCommand(text: string): { command: string; args: string[] } | null {
   const trimmed = text.trim();

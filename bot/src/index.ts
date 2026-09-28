@@ -4,11 +4,11 @@ import QRCode from 'qrcode';
 import express from 'express';
 import fs from 'fs';
 import winston from 'winston';
-import { config } from './config';
-import { sessionService } from './services/sessionService';
-import { apiService } from './services/apiService';
-import { extractCommandText } from './services/interactiveService';
-import { handleMessage, isInteractiveResponse, toPlainText } from './handlers/messageHandler';
+import { config } from './config/index.js';
+import { sessionService } from './services/sessionService.js';
+import { apiService } from './services/apiService.js';
+import { extractCommandText } from './services/interactiveService.js';
+import { handleMessage, isInteractiveResponse, toPlainText } from './handlers/messageHandler.js';
 
 const logger = winston.createLogger({
   level: 'info',

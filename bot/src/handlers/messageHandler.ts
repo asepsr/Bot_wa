@@ -1,16 +1,16 @@
-import { parseCommand, parseTextCommand } from './commandParser';
-import { apiService } from '../services/apiService';
-import { messageService } from '../services/messageService';
+import { parseCommand, parseTextCommand } from './commandParser.js';
+import { apiService } from '../services/apiService.js';
+import { messageService } from '../services/messageService.js';
 import {
   buildListMenu,
   buildQuickReply,
   cartConfirmQuickReply,
   checkoutCta,
-} from '../services/interactiveService';
+} from '../services/interactiveService.js';
 import type { proto } from '@whiskeysockets/baileys';
-import { config } from '../config';
-import { validateWaId, sanitizeInput } from '../utils/validators';
-import { formatRupiah } from '../utils/constants';
+import { config } from '../config/index.js';
+import { validateWaId, sanitizeInput } from '../utils/validators.js';
+import { formatRupiah } from '../utils/constants.js';
 import winston from 'winston';
 
 type CartItem = { productId: number; name: string; price: number; quantity: number };

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { config } from '../config';
+import { config } from '../config/index.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({

@@ -1,5 +1,5 @@
-import { formatRupiah } from '../utils/constants';
-import { apiService } from './apiService';
+import { formatRupiah } from '../utils/constants.js';
+import { apiService } from './apiService.js';
 
 const defaults = {
   menu_message: '*MENU UTAMA*\n\n1. *PRODUCT* - Lihat daftar produk dan kode\n2. *ORDER* - Mulai pilih produk untuk keranjang\n3. *ORDER_STATUS <nomor>** - Cek status\n4. *MY_ORDERS* - Pesanan saya\n5. *HELP* - Bantuan',
